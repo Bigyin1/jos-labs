@@ -86,7 +86,7 @@ InitGraphics (
 {
   EFI_STATUS                    Status;
   EFI_GRAPHICS_OUTPUT_PROTOCOL  *GraphicsOutput;
-
+  
   ASSERT (LoaderParams != NULL);
 
   STATIC EFI_GRAPHICS_OUTPUT_BLT_PIXEL mBlackColour = {0x00, 0x00, 0x00, 0x00};
@@ -113,6 +113,21 @@ InitGraphics (
   //
   // Hint: Use GetMode/SetMode functions.
   //
+
+  // for (UINT32 i = 0; i < GraphicsOutput->Mode->MaxMode; i++)
+  // {
+  //   GraphicsOutput->QueryMode(
+  //     GraphicsOutput,
+  //     i,
+  //     &GraphicsOutput->Mode->SizeOfInfo,
+  //     &GraphicsOutput->Mode->Info
+  //   );
+
+  //   DEBUG ((DEBUG_INFO, "Res: %u; Idx: %u\n", GraphicsOutput->Mode->Info->HorizontalResolution, i));
+  // }
+
+  GraphicsOutput->SetMode(GraphicsOutput, 18);
+  
 
   //
   // Fill screen with black.
@@ -257,7 +272,7 @@ GetKernelFile (
   )
 {
   EFI_STATUS                       Status = EFI_UNSUPPORTED;
-  EFI_LOADED_IMAGE_PROTOCOL        *LoadedImage;
+  EFI_LOADED_IMAGE_PROTOCOL        *LoadedImage = NULL;
   EFI_SIMPLE_FILE_SYSTEM_PROTOCOL  *FileSystem;
   EFI_FILE_PROTOCOL                *CurrentDriveRoot;
   EFI_FILE_PROTOCOL                *KernelFile;
@@ -270,8 +285,8 @@ GetKernelFile (
   // get loader's containing device.
   //
   // LAB 1: Your code here
-  (void)LoadedImage;
 
+  Status = gBS->HandleProtocol(gImageHandle, &gEfiLoadedImageProtocolGuid, (VOID **) &LoadedImage);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "JOS: Cannot find LoadedImage protocol - %r\n", Status));
     return Status;
@@ -288,8 +303,7 @@ GetKernelFile (
   // to read the kernel from it later.
   //
   // LAB 1: Your code here
-  (void)FileSystem;
-
+  Status = gBS->HandleProtocol(LoadedImage->DeviceHandle, &gEfiSimpleFileSystemProtocolGuid, (VOID **) &FileSystem);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "JOS: Cannot find own FileSystem protocol - %r\n", Status));
     return Status;
@@ -300,8 +314,7 @@ GetKernelFile (
   // NOTE: Don't forget to Use ->Close after you've done using it.
   //
   // LAB 1: Your code here
-  (void)CurrentDriveRoot;
-
+  Status = FileSystem->OpenVolume(FileSystem, &CurrentDriveRoot);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "JOS: Cannot access own file system - %r\n", Status));
     return Status;
@@ -313,11 +326,13 @@ GetKernelFile (
   //
   // LAB 1: Your code here
   KernelFile = NULL;
-
+  Status = CurrentDriveRoot->Open(CurrentDriveRoot, &KernelFile, KERNEL_PATH, EFI_FILE_MODE_READ, EFI_FILE_VALID_ATTR);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "JOS: Cannot access own file system - %r\n", Status));
     return Status;
   }
+
+  CurrentDriveRoot->Close(CurrentDriveRoot);
 
   *FileProtocol = KernelFile;
   return EFI_SUCCESS;
@@ -982,7 +997,8 @@ UefiMain (
   UINTN              EntryPoint;
   VOID               *GateData;
 
-#if 1 ///< Uncomment to await debugging
+
+#if 0 ///< Uncomment to await debugging
   volatile BOOLEAN   Connected;
   DEBUG ((DEBUG_INFO, "JOS: Awaiting debugger connection\n"));
 
@@ -1059,7 +1075,7 @@ UefiMain (
   DEBUG ((DEBUG_INFO, "JOS: LoaderParams pointer: %p\n", LoaderParams));
   DEBUG ((DEBUG_INFO, "JOS: KernelCallGate: %p\n", CallKernelThroughGate));
 
-#if 0 ///< Enable to see current memory map.
+#if 1 ///< Enable to see current memory map.
   PrintMemoryMap ();
 #endif
 
