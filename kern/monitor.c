@@ -70,7 +70,12 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf) {
     while (rbp != 0)
     {
         uint64_t rip = *((uint64_t*)rbp + 1);
+
+        struct Ripdebuginfo dinfo = {};
+        debuginfo_rip(rip, &dinfo);
+
         cprintf("  rbp %016lx  rip %016lx\n", rbp, rip);
+        cprintf("    %s:%d: %s+%ld\n", dinfo.rip_file, dinfo.rip_line, dinfo.rip_fn_name, rip - dinfo.rip_fn_addr);
 
         rbp = *((uint64_t*)rbp);
     }
