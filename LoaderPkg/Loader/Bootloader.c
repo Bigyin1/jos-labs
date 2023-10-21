@@ -1014,7 +1014,7 @@ UefiMain(
     DEBUG((DEBUG_INFO, "JOS: LoaderParams pointer: %p\n", LoaderParams));
     DEBUG((DEBUG_INFO, "JOS: KernelCallGate: %p\n", CallKernelThroughGate));
 
-#if 1 ///< Enable to see current memory map.
+#if 0 ///< Enable to see current memory map.
     PrintMemoryMap();
 #endif
 

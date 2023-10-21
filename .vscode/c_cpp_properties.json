@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "intelliSenseMode": "clang-x64",
+            "includePath": [
+                "${workspaceFolder}"
+            ],
+            "defines": [
+                "LAB=3",
+                "CONFIG_KSPACE=y"
+            ],
+            "compilerPath": "${workspaceFolder}/ispras-llvm/bin/clang",
+            "cStandard": "c11",
+            "cppStandard": "c++17"
+        }
+    ],
+    "version": 4
+}

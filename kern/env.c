@@ -89,6 +89,18 @@ env_init(void) {
     /* Set up envs array */
 
     // LAB 3: Your code here
+    env_free_list = envs;
+
+    size_t i = 0;
+    for (; i < NENV - 1; i++) {
+        envs[i].env_id = 0;
+        envs[i].env_status = ENV_FREE;
+        envs[i].env_link = &envs[i + 1];
+    }
+
+    envs[i].env_id = 0;
+    envs[i].env_status = ENV_FREE;
+    envs[i].env_link = NULL;
 }
 
 /* Allocates and initializes a new environment.
@@ -145,7 +157,12 @@ env_alloc(struct Env **newenv_store, envid_t parent_id, enum EnvType type) {
     env->env_tf.tf_cs = GD_KT;
 
     // LAB 3: Your code here:
-    // static uintptr_t stack_top = 0x2000000;
+    static uintptr_t stack_top = 0x2000000;
+
+    env->env_tf.tf_rsp = stack_top;
+
+    stack_top += 2 * PAGE_SIZE;
+
 #else
     env->env_tf.tf_ds = GD_UD | 3;
     env->env_tf.tf_es = GD_UD | 3;
@@ -221,6 +238,47 @@ static int
 load_icode(struct Env *env, uint8_t *binary, size_t size) {
     // LAB 3: Your code here
 
+    const struct Elf *ElfHeader = (const struct Elf *)binary;
+
+    if (ElfHeader->e_magic != ELF_MAGIC) {
+        return -E_INVALID_EXE;
+    }
+
+    const struct Proghdr *phdrs = (const struct Proghdr *)(binary + ElfHeader->e_phoff);
+
+    for (size_t i = 0; i < ElfHeader->e_phnum; i++) {
+
+        const struct Proghdr *currPhdr = phdrs + i;
+
+        if (currPhdr->p_type != ELF_PROG_LOAD) continue;
+
+        void *p_va = (void *)currPhdr->p_va;
+        // cprintf("%p, %lx, %lx\n", p_va, currPhdr->p_offset, currPhdr->p_filesz);
+
+        memcpy(p_va, binary + currPhdr->p_offset, (size_t)currPhdr->p_filesz);
+
+        // uint8_t *va_b = p_va;
+        // for (size_t i = 0; i < currPhdr->p_filesz; i++) {
+        //     cprintf("before: %x, %x\n", *(va_b + i), *(binary + currPhdr->p_offset + i));
+        //     *(va_b + i) = *(binary + currPhdr->p_offset + i);
+        //     cprintf("after: %x\n", *(va_b + i));
+        //     cprintf("after: %x\n", *(va_b + i));
+        //     cprintf("after: %x, %x\n", *(va_b + i), *(binary + currPhdr->p_offset + i));
+        //     cprintf("after: %x, %x\n", *(va_b + i), *(binary + currPhdr->p_offset + i));
+        // }
+
+
+        size_t segToZero = currPhdr->p_memsz - currPhdr->p_filesz;
+        memset(p_va + currPhdr->p_filesz, 0, segToZero);
+
+        // for (size_t i = 0; i < 16; i++) {
+        //     cprintf("end: %x\n", *(va_b + i));
+        // }
+    }
+
+    env->binary = binary;
+    env->env_tf.tf_rip = (uintptr_t)ElfHeader->e_entry;
+
     return 0;
 }
 
@@ -233,6 +291,20 @@ load_icode(struct Env *env, uint8_t *binary, size_t size) {
 void
 env_create(uint8_t *binary, size_t size, enum EnvType type) {
     // LAB 3: Your code here
+    struct Env *newenv = NULL;
+    int err = 0;
+
+    err = env_alloc(&newenv, 0, type);
+    if (err != 0) {
+        panic("env_alloc: %i", err);
+    }
+
+    err = load_icode(newenv, binary, size);
+    if (err != 0) {
+        panic("load_icode: %i", err);
+    }
+
+    newenv->env_parent_id = 0;
 }
 
 
@@ -352,6 +424,17 @@ env_run(struct Env *env) {
     }
 
     // LAB 3: Your code here
+
+    if (curenv != NULL) {
+        if (curenv->env_status == ENV_RUNNING)
+            curenv->env_status = ENV_RUNNABLE;
+    }
+
+    curenv = env;
+    curenv->env_status = ENV_RUNNING;
+    curenv->env_runs++;
+
+    env_pop_tf(&curenv->env_tf);
 
     while (1)
         ;

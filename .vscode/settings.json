@@ -1,0 +1,24 @@
+{
+    "files.associations": {
+        "acpi62.h": "c",
+        "*.inc": "cpp",
+        "uefiapplicationentrypoint.h": "c",
+        "debuglib.h": "c",
+        "basememorylib.h": "c",
+        "mmu.h": "c",
+        "elf.h": "c",
+        "uefi.h": "c",
+        "elf64.h": "c",
+        "assert.h": "c",
+        "macro.h": "c",
+        "monitor.h": "c",
+        "sched.h": "c",
+        "kdebug.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "enabled",
+    "terminal.integrated.env.osx": {
+        "ISP_PATH": "./ispras-llvm/bin",
+        "PATH": "./ispras-llvm/bin",
+        // "ARCHS": "IA32"
+    }
+}
