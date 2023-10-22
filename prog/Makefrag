@@ -12,7 +12,7 @@ $(OBJDIR)/prog/%.o: prog/%.c $(OBJDIR)/.vars.USER_CFLAGS
 $(OBJDIR)/prog/%.ld: prog/prog.ld
 	@echo + GEN: $@
 	@mkdir -p $(@D)
-	@sed "s/#ADDRESS#/$$(ls prog/*.c | nl -v 16777216 -i 65536 | grep $$(basename $@ .ld).c | cut -f1)/" $^ > $@
+	@sed "s/#ADDRESS#/$$(ls prog/*.c | nl -w 10 -v 16777216 -i 65536 | grep $$(basename $@ .ld).c | cut -f1)/" $^ > $@
 
 $(OBJDIR)/prog/%: $(OBJDIR)/prog/%.o $(OBJDIR)/prog/%.ld $(OBJDIR)/lib/entry.o $(PROGLIBS:%=$(OBJDIR)/lib/lib%.a)
 	@echo + ld $@
