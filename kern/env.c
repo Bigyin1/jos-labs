@@ -253,27 +253,11 @@ load_icode(struct Env *env, uint8_t *binary, size_t size) {
         if (currPhdr->p_type != ELF_PROG_LOAD) continue;
 
         void *p_va = (void *)currPhdr->p_va;
-        // cprintf("%p, %lx, %lx\n", p_va, currPhdr->p_offset, currPhdr->p_filesz);
 
         memcpy(p_va, binary + currPhdr->p_offset, (size_t)currPhdr->p_filesz);
 
-        // uint8_t *va_b = p_va;
-        // for (size_t i = 0; i < currPhdr->p_filesz; i++) {
-        //     cprintf("before: %x, %x\n", *(va_b + i), *(binary + currPhdr->p_offset + i));
-        //     *(va_b + i) = *(binary + currPhdr->p_offset + i);
-        //     cprintf("after: %x\n", *(va_b + i));
-        //     cprintf("after: %x\n", *(va_b + i));
-        //     cprintf("after: %x, %x\n", *(va_b + i), *(binary + currPhdr->p_offset + i));
-        //     cprintf("after: %x, %x\n", *(va_b + i), *(binary + currPhdr->p_offset + i));
-        // }
-
-
         size_t segToZero = currPhdr->p_memsz - currPhdr->p_filesz;
         memset(p_va + currPhdr->p_filesz, 0, segToZero);
-
-        // for (size_t i = 0; i < 16; i++) {
-        //     cprintf("end: %x\n", *(va_b + i));
-        // }
     }
 
     env->binary = binary;
@@ -303,8 +287,6 @@ env_create(uint8_t *binary, size_t size, enum EnvType type) {
     if (err != 0) {
         panic("load_icode: %i", err);
     }
-
-    newenv->env_parent_id = 0;
 }
 
 

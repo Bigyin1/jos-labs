@@ -34,3 +34,4 @@
 /LoaderPkg/mtoc-mac64.sha256
 .devcontainer
 ispras-llvm
+ispras-qemu

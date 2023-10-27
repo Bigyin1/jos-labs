@@ -17,7 +17,7 @@
     },
     "C_Cpp.errorSquiggles": "enabled",
     "terminal.integrated.env.osx": {
-        "ISP_PATH": "./ispras-llvm/bin",
+        "ISP_PATH": "./ispras-llvm/bin:./ispras-llvm/bin",
         "PATH": "./ispras-llvm/bin",
         // "ARCHS": "IA32"
     }
