@@ -4,6 +4,7 @@
 #include <inc/dwarf.h>
 #include <inc/elf.h>
 #include <inc/x86.h>
+#include <inc/error.h>
 
 #include <kern/kdebug.h>
 #include <kern/env.h>
@@ -97,6 +98,38 @@ find_function(const char *const fname) {
      * in assembly. */
 
     // LAB 3: Your code here:
+    uintptr_t funcAddr = 0;
+    int err = 0;
+
+    struct Dwarf_Addrs addrs = {};
+    load_kernel_dwarf_info(&addrs);
+
+    if ((err = address_by_fname(&addrs, fname, &funcAddr)) == 0)
+        return funcAddr;
+    if (err != -E_NO_ENT) {
+        panic("address_by_fname: %i", err);
+    }
+
+    if ((err = naive_address_by_fname(&addrs, fname, &funcAddr)) == 0)
+        return funcAddr;
+    if (err != -E_NO_ENT) {
+        panic("naive_address_by_fname: %i", err);
+    }
+
+    for (struct Elf64_Sym *kernSymbol = (struct Elf64_Sym *)uefi_lp->SymbolTableStart;
+         (EFI_PHYSICAL_ADDRESS)kernSymbol < uefi_lp->SymbolTableEnd;
+         kernSymbol++) {
+
+        UINT8 symbInfo = kernSymbol->st_info;
+        if (ELF64_ST_BIND(symbInfo) != STB_GLOBAL || ELF64_ST_TYPE(symbInfo) != STT_FUNC)
+            continue;
+
+        const char *symbName = (const char *)(uefi_lp->StringTableStart + kernSymbol->st_name);
+
+        if (!strcmp(fname, symbName)) {
+            return kernSymbol->st_value;
+        }
+    }
 
     return 0;
 }

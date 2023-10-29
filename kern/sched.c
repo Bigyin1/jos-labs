@@ -27,31 +27,26 @@ sched_yield(void) {
     // LAB 3: Your code here:
 
 
-    for (struct Env *curr = curenv == NULL ? envs : curenv->env_link;
-         curr != NULL;
-         curr = curr->env_link) {
+    struct Env *lastEnv = &envs[NENV - 1];
 
-        if (curr->env_status != ENV_RUNNABLE) {
-            continue;
-        };
-
-        env_run(curr);
-    }
-
-    for (struct Env *curr = envs;
+    for (struct Env *curr = curenv == NULL || curenv == lastEnv ? envs : curenv + 1;
          curr != curenv;
-         curr = curr->env_link) {
+         curr = curr == lastEnv ? envs : curr + 1) {
 
-        if (curr->env_status != ENV_RUNNABLE) {
+        if (curr->env_status == ENV_DYING) {
+            env_free(curr);
             continue;
+        }
+
+        if (curr->env_status == ENV_RUNNABLE) {
+            env_run(curr);
         };
-
-        env_run(curr);
     }
 
-    if (curenv->env_status == ENV_RUNNABLE) {
+    if (curenv->env_status == ENV_RUNNING) {
         env_run(curenv);
-    }
+    } else if (curenv->env_status == ENV_DYING)
+        env_free(curenv);
 
     cprintf("Halt\n");
 

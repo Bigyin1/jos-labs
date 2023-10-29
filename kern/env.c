@@ -179,6 +179,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id, enum EnvType type) {
     return 0;
 }
 
+
 /* Pass the original ELF image to binary/size and bind all the symbols within
  * its loaded address space specified by image_start/image_end.
  * Make sure you understand why you need to check that each binding
@@ -189,6 +190,60 @@ bind_functions(struct Env *env, uint8_t *binary, size_t size, uintptr_t image_st
     // LAB 3: Your code here:
 
     /* NOTE: find_function from kdebug.c should be used */
+    const struct Elf *ElfHeader = (const struct Elf *)binary;
+
+    const struct Secthdr *sectHdrs = (const struct Secthdr *)(binary + ElfHeader->e_shoff);
+
+    const struct Secthdr *strTabHdr = NULL;
+    for (UINT16 i = 0; i < ElfHeader->e_shnum; i++) {
+
+        if (sectHdrs[i].sh_type != ELF_SHT_STRTAB)
+            continue;
+
+        const char *shstrtab = (const char *)(&binary[sectHdrs[ElfHeader->e_shstrndx].sh_offset]);
+        if (strcmp(".strtab", &shstrtab[sectHdrs[i].sh_name]))
+            continue;
+
+        strTabHdr = &sectHdrs[i];
+    }
+    if (strTabHdr == NULL)
+        return -E_INVALID_EXE;
+
+    const char *strTab = (const char *)(binary + strTabHdr->sh_offset);
+
+    const struct Secthdr *symbTabHdr = NULL;
+    for (UINT16 i = 0; i < ElfHeader->e_shnum; i++) {
+        if (sectHdrs[i].sh_type != ELF_SHT_SYMTAB)
+            continue;
+
+        symbTabHdr = &sectHdrs[i];
+        break;
+    }
+    if (symbTabHdr == NULL)
+        return -E_INVALID_EXE;
+    if (symbTabHdr->sh_entsize != sizeof(struct Elf64_Sym))
+        return -E_INVALID_EXE;
+
+    const struct Elf64_Sym *symbTab = (const struct Elf64_Sym *)(binary + symbTabHdr->sh_offset);
+
+    for (size_t i = 0; i < symbTabHdr->sh_size / symbTabHdr->sh_entsize; i++) {
+
+        UINT8 symbInfo = symbTab[i].st_info;
+        if (ELF64_ST_BIND(symbInfo) != STB_GLOBAL || ELF64_ST_TYPE(symbInfo) != STT_OBJECT)
+            continue;
+
+        UINT32 symNameIdx = symbTab[i].st_name;
+        const char *symName = &strTab[symNameIdx];
+        uintptr_t kernFuncAddr = find_function(symName);
+        if (kernFuncAddr == 0)
+            continue;
+
+        UINT64 varAddr = symbTab[i].st_value;
+        if (varAddr < image_start || varAddr > image_end)
+            return -E_INVALID_EXE;
+
+        *((uintptr_t *)varAddr) = kernFuncAddr;
+    }
 
     return 0;
 }
@@ -244,6 +299,8 @@ load_icode(struct Env *env, uint8_t *binary, size_t size) {
         return -E_INVALID_EXE;
     }
 
+    uintptr_t image_start = 0, image_end = 0;
+
     const struct Proghdr *phdrs = (const struct Proghdr *)(binary + ElfHeader->e_phoff);
 
     for (size_t i = 0; i < ElfHeader->e_phnum; i++) {
@@ -258,7 +315,16 @@ load_icode(struct Env *env, uint8_t *binary, size_t size) {
 
         size_t segToZero = currPhdr->p_memsz - currPhdr->p_filesz;
         memset(p_va + currPhdr->p_filesz, 0, segToZero);
+
+        if (image_start > (uintptr_t)p_va || image_start == 0)
+            image_start = (uintptr_t)p_va;
+
+        if (image_end < (uintptr_t)p_va + currPhdr->p_memsz || image_end == 0)
+            image_end = (uintptr_t)p_va + currPhdr->p_memsz;
     }
+
+    if (bind_functions(env, binary, size, image_start, image_end) < 0)
+        return -E_INVALID_EXE;
 
     env->binary = binary;
     env->env_tf.tf_rip = (uintptr_t)ElfHeader->e_entry;
@@ -315,6 +381,11 @@ env_destroy(struct Env *env) {
      * it traps to the kernel. */
 
     // LAB 3: Your code here
+
+    env_free(env);
+
+    if (env == curenv)
+        sched_yield();
 }
 
 #ifdef CONFIG_KSPACE
