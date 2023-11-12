@@ -17,8 +17,11 @@
     },
     "C_Cpp.errorSquiggles": "enabled",
     "terminal.integrated.env.osx": {
-        "ISP_PATH": "./ispras-llvm/bin:./ispras-llvm/bin",
+        "ISP_PATH": "./ispras-llvm/bin:./ispras-qemu/bin",
         "PATH": "./ispras-llvm/bin",
         // "ARCHS": "IA32"
+    },
+    "terminal.integrated.env.linux": {
+        "ISP_PATH": "./ispras-qemu/bin",
     }
 }
