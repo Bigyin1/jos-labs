@@ -72,6 +72,70 @@ acpi_enable(void) {
         ;
 }
 
+
+static bool
+acpi_checksum(void *addr, size_t checkLen) {
+
+    uint8_t sum = 0;
+    for (size_t i = 0; i < checkLen; i++) {
+        sum += ((uint8_t *)addr)[i];
+    }
+
+    return sum == 0;
+}
+
+
+static const char RSDP_signature[] = "RSD PTR ";
+static const char XSDT_signature[] = "XSDT";
+
+RSDP *
+get_rsdp() {
+
+    static RSDP *rsdpVirtAddr;
+
+    if (rsdpVirtAddr != NULL)
+        return rsdpVirtAddr;
+
+    rsdpVirtAddr = (RSDP *)mmio_map_region(uefi_lp->ACPIRoot, sizeof(RSDP));
+
+    if (strncmp(rsdpVirtAddr->Signature, RSDP_signature, sizeof(rsdpVirtAddr->Signature)) != 0)
+        panic("ACPI RSDP incorrect signature\n");
+
+    if (!acpi_checksum(rsdpVirtAddr, 20))
+        panic("ACPI RSDP incorrect partial checksum");
+
+    if (!acpi_checksum(rsdpVirtAddr, sizeof(RSDP)))
+        panic("ACPI RSDP incorrect extended checksum");
+
+    return rsdpVirtAddr;
+}
+
+static XSDT *
+get_xsdt(physaddr_t xsdtPhysAddr) {
+
+    static XSDT *xsdtVirtAddr;
+
+    if (xsdtVirtAddr != NULL)
+        return xsdtVirtAddr;
+
+    xsdtVirtAddr = (XSDT *)mmio_map_region(xsdtPhysAddr, sizeof(ACPISDTHeader));
+
+    if (strncmp(xsdtVirtAddr->h.Signature, XSDT_signature, sizeof(xsdtVirtAddr->h.Signature)) != 0)
+        panic("ACPI XSDT incorrect signature\n");
+
+    xsdtVirtAddr = (XSDT *)mmio_remap_last_region(xsdtPhysAddr,
+                                                  xsdtVirtAddr,
+                                                  sizeof(ACPISDTHeader),
+                                                  xsdtVirtAddr->h.Length);
+
+
+    if (!acpi_checksum(xsdtVirtAddr, xsdtVirtAddr->h.Length))
+        panic("ACPI XSDT incorrect checksum");
+
+    return xsdtVirtAddr;
+}
+
+
 static void *
 acpi_find_table(const char *sign) {
     /*
@@ -88,6 +152,39 @@ acpi_find_table(const char *sign) {
      */
     // LAB 5: Your code here:
 
+    RSDP *rsdp = get_rsdp();
+    if (strcmp(sign, RSDP_signature) == 0)
+        return rsdp;
+
+    XSDT *xsdt = get_xsdt(rsdp->XsdtAddress);
+    if (strcmp(sign, XSDT_signature) == 0)
+        return xsdt;
+
+    size_t headersCount = (xsdt->h.Length - sizeof(xsdt->h)) / sizeof(*xsdt->PointerToOtherSDT);
+    ACPISDTHeader *hdrVirtAddr = NULL;
+
+    for (size_t i = 0; i < headersCount; i++) {
+
+        hdrVirtAddr = (ACPISDTHeader *)mmio_remap_last_region(xsdt->PointerToOtherSDT[i],
+                                                              hdrVirtAddr,
+                                                              sizeof(ACPISDTHeader),
+                                                              sizeof(ACPISDTHeader));
+
+        if (strncmp(sign, hdrVirtAddr->Signature, sizeof(hdrVirtAddr->Signature)) != 0)
+            continue;
+
+        hdrVirtAddr = (ACPISDTHeader *)mmio_remap_last_region(xsdt->PointerToOtherSDT[i],
+                                                              hdrVirtAddr,
+                                                              sizeof(ACPISDTHeader),
+                                                              hdrVirtAddr->Length);
+        if (!acpi_checksum(hdrVirtAddr, hdrVirtAddr->Length))
+            panic("ACPI table %s has incorrect checksum\n", sign);
+
+
+        return hdrVirtAddr;
+    }
+
+
     return NULL;
 }
 
@@ -99,6 +196,14 @@ get_fadt(void) {
     // HINT: ACPI table signatures are
     //       not always as their names
 
+    static FADT *fadt;
+
+    if (fadt != NULL)
+        return fadt;
+
+    fadt = (FADT *)acpi_find_table("FACP");
+    return fadt;
+
     return NULL;
 }
 
@@ -108,7 +213,13 @@ get_hpet(void) {
     // LAB 5: Your code here
     // (use acpi_find_table)
 
-    return NULL;
+    static HPET *hpet;
+
+    if (hpet != NULL)
+        return hpet;
+
+    hpet = (HPET *)acpi_find_table("HPET");
+    return hpet;
 }
 
 /* Getting physical HPET timer address from its table. */
@@ -209,11 +320,48 @@ hpet_get_main_cnt(void) {
 void
 hpet_enable_interrupts_tim0(void) {
     // LAB 5: Your code here
+
+    nmi_disable();
+
+    hpetReg->GEN_CONF ^= HPET_ENABLE_CNF; // turn off to setup timer
+
+    hpetReg->GEN_CONF |= HPET_LEG_RT_CNF; // legacy mode
+
+    hpetReg->TIM0_CONF |= HPET_TN_INT_ENB_CNF; // enable interrupts
+    hpetReg->TIM0_CONF |= HPET_TN_TYPE_CNF;    // enable periodic mode
+    hpetReg->TIM0_CONF |= HPET_TN_VAL_SET_CNF; // enable comparator
+
+
+    hpetReg->TIM0_COMP = (1 * Peta) / (2 * hpetFemto); // set 0.5 sec period
+
+    hpetReg->MAIN_CNT = 0;                // zero out counter
+    hpetReg->GEN_CONF |= HPET_ENABLE_CNF; // turn on timer;
+
+    pic_irq_unmask(IRQ_TIMER);
+    nmi_enable();
 }
 
 void
 hpet_enable_interrupts_tim1(void) {
     // LAB 5: Your code here
+    nmi_disable();
+
+    hpetReg->GEN_CONF ^= HPET_ENABLE_CNF; // turn off to setup timer
+
+    hpetReg->GEN_CONF |= HPET_LEG_RT_CNF; // legacy mode
+
+    hpetReg->TIM1_CONF |= HPET_TN_INT_ENB_CNF; // enable interrupts
+    hpetReg->TIM1_CONF |= HPET_TN_TYPE_CNF;    // enable periodic mode
+    hpetReg->TIM1_CONF |= HPET_TN_VAL_SET_CNF; // enable comparator
+
+
+    hpetReg->TIM1_COMP = (3 * Peta) / (2 * hpetFemto); // set 1.5 sec period
+
+    hpetReg->MAIN_CNT = 0;                // zero out counter
+    hpetReg->GEN_CONF |= HPET_ENABLE_CNF; // turn on timer;
+
+    pic_irq_unmask(IRQ_CLOCK);
+    nmi_enable();
 }
 
 void
