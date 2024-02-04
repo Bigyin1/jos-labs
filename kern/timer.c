@@ -382,6 +382,25 @@ hpet_cpu_frequency(void) {
     static uint64_t cpu_freq;
 
     // LAB 5: Your code here
+    if (cpu_freq != 0) {
+        return cpu_freq;
+    }
+
+    uint64_t hpet_1 = hpetReg->MAIN_CNT;
+    uint64_t hpet_delta = 0;
+
+    uint64_t tsc_1 = read_tsc();
+
+    const uint64_t hpet_measurements = 100000;
+    do {
+        asm volatile("pause");
+        hpet_delta = hpetReg->MAIN_CNT - hpet_1;
+
+    } while (hpet_delta < hpet_measurements);
+
+    uint64_t tsc_delta = read_tsc() - tsc_1;
+
+    cpu_freq = tsc_delta * hpetFreq / hpet_delta;
 
     return cpu_freq;
 }
@@ -397,7 +416,7 @@ pmtimer_get_timeval(void) {
  *      can be 24-bit or 32-bit. */
 uint64_t
 pmtimer_cpu_frequency(void) {
-    static uint64_t cpu_freq;
+    static uint64_t cpu_freq = 2400328000; // TODO
 
     // LAB 5: Your code here
 

@@ -193,23 +193,105 @@ print_timer_error(void) {
 
 // LAB 5: Your code here:
 
+
+enum Timer_id {
+    ID_NONE = -1,
+    ID_HPET0,
+    ID_HPET1,
+    ID_PIT,
+    ID_PM,
+};
+
+
 static bool timer_started = 0;
-static int timer_id = -1;
+static enum Timer_id timer_id = ID_NONE;
 static uint64_t timer = 0;
-static uint64_t freq = 0;
+// static uint64_t freq = 0;
+
+static uint64_t
+get_cpu_freq_by_id(enum Timer_id t_id) {
+
+
+    switch (t_id) {
+    case ID_HPET0:
+        return timer_hpet0.get_cpu_freq();
+
+    case ID_HPET1:
+        return timer_hpet1.get_cpu_freq();
+
+    case ID_PIT:
+        return timer_pit.get_cpu_freq();
+
+    case ID_PM:
+        return timer_acpipm.get_cpu_freq();
+
+    default:
+        return 0;
+    }
+}
+
+static enum Timer_id
+get_timer_id(const char *name) {
+
+    if (strcmp(name, "hpet0") == 0) {
+        return ID_HPET0;
+    }
+
+    if (strcmp(name, "hpet1") == 0) {
+        return ID_HPET1;
+    }
+
+    if (strcmp(name, "pit") == 0) {
+        return ID_PIT;
+    }
+
+    if (strcmp(name, "pm") == 0) {
+        return ID_NONE; // TODO
+    }
+
+    return ID_NONE;
+}
+
 
 void
 timer_start(const char *name) {
-    (void)timer_started;
-    (void)timer_id;
-    (void)timer;
-    (void)freq;
+
+    timer_id = get_timer_id(name);
+    if (timer_id == ID_NONE) {
+        cprintf("timer_start: unsupported timer %s\n", name);
+        return;
+    }
+
+    timer_started = true;
+    timer = read_tsc();
 }
 
 void
 timer_stop(void) {
+
+    if (!timer_started) {
+        print_timer_error();
+        return;
+    }
+
+    uint64_t cpu_ticks_since = read_tsc() - timer;
+
+    uint64_t seconds_since = cpu_ticks_since / get_cpu_freq_by_id(timer_id);
+
+    print_time(seconds_since);
+
+    timer_started = false;
+    timer_id = ID_NONE;
 }
 
 void
 timer_cpu_frequency(const char *name) {
+
+    enum Timer_id id = get_timer_id(name);
+    if (id == ID_NONE) {
+        cprintf("timer_cpu_frequency: unsupported timer %s\n", name);
+        return;
+    }
+
+    cprintf("%ld\n", get_cpu_freq_by_id(id));
 }
